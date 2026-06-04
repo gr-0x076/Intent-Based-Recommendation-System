@@ -1,0 +1,30 @@
+# Data directories — Coveo dataset has its own access agreement; files are large
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/embeddings/*
+!data/embeddings/.gitkeep
+
+# Experiment logs and model checkpoints
+experiments/*
+!experiments/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment
+.env
+venv/
+
+# ML artifacts
+*.pkl
+*.index
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store

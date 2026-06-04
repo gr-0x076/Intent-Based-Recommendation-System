@@ -1,0 +1,16 @@
+torch>=2.0.0
+sentence-transformers
+faiss-cpu
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+pandas
+numpy
+scikit-learn
+mlflow
+plotly
+umap-learn
+jupyter
+tqdm
+pydantic
