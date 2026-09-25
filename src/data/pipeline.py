@@ -1,3 +1,17 @@
+"""
+Experimental data pipeline.
+
+Status:
+Planned / under development.
+
+Responsibilities:
+- Load raw data
+- Construct sessions
+- Sort events temporally
+- Create train/evaluation splits
+- Prepare features for experiments
+"""
+
 from __future__ import annotations
 import pandas as pd
 from pathlib import Path

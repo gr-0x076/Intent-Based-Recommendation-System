@@ -63,8 +63,8 @@ def recommend(request: RecommendRequest):
     # TODO: look up item embeddings for click events from app.state.item_embedding
     # TODO: build a mixed input sequence tensor (queries + clicks interleaved by timestamp)
     # TODO: pass through app.state.intent_encoder → intent_vector [1, hidden_dim]
-    # TODO: detect intent shift: if 2+ query events exist, compute cosine similarity
-    #       between consecutive query embeddings; flag shift if any similarity < 0.5
+    # TODO: evaluate intent-shift detection only after validating a definition;
+    #       do not assume a fixed cosine-similarity threshold
     # TODO: query app.state.faiss_index.search(intent_vector, k=request.top_k)
     # TODO: return RecommendResponse with recommendations, intent_vector.tolist(),
     #       intent_shift_detected

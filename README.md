@@ -1,181 +1,35 @@
-# IntentRec — Intent-Based E-Commerce Recommender System
+# Intent-Based Recommender System
 
-> Recommending what users need right now, not just what they liked before.
+## Project Goal
 
-IntentRec is a session-aware recommendation system that dynamically infers user intent from search queries and user interactions. Unlike traditional recommenders that rely heavily on long-term history, IntentRec focuses on understanding a user's current goal and adapting recommendations in real time.
+Build and evaluate a session-based recommender system that models
+current user intent and adapts recommendations to changing session context.
 
-Built using the Coveo SIGIR 2021 E-Commerce Dataset.
+## Research Question
 
----
+Can explicit intent representation and sequential modeling improve:
 
-## Problem
+- Recommendation relevance
+- Adaptation to intent shifts
+- Cold-start / short-session performance
+- Novelty and diversity
 
-Traditional recommendation systems often assume user preferences are stable.
-
-In reality, user goals change rapidly.
-
-Examples:
-
-- A user who usually buys electronics may suddenly search for formal shoes.
-- A user searching for gaming laptops today may need accessories tomorrow.
-- A user researching Python tutorials may later focus on interview preparation.
-
-IntentRec aims to model evolving user intent and generate recommendations that reflect the user's current objective.
-
----
+compared with classical and sequential recommendation baselines?
 
 ## Approach
 
-```text
-Search Query + Session Events
-                │
-                ▼
-      Query Embeddings
-                │
-                ▼
-        GRU Session Encoder
-                │
-                ▼
-       Intent Representation
-                │
-                ▼
-         FAISS Retrieval
-                │
-                ▼
-      Candidate Products
-                │
-                ▼
-          Re-Ranking
-                │
-                ▼
-       Final Recommendations
-```
+We follow an evidence-driven development process:
 
----
-
-## Key Features
-
-- Session-aware recommendation
-- Query-aware intent modeling
-- Dynamic intent representation
-- Intent-shift adaptation
-- FAISS-based retrieval
-- Intent-aware ranking
-
----
-
-## Dataset
-
-### Coveo SIGIR 2021 Dataset
-
-Contains:
-
-- Search queries
-- Product views
-- Click events
-- Cart additions
-- Purchases
-- Product metadata
-- Session information
-
-This combination of query and behavioral data makes it ideal for intent modeling.
-
----
-
-## Tech Stack
-
-| Component | Technology |
-|-----------|------------|
-| Language | Python |
-| Deep Learning | PyTorch |
-| Session Encoder | GRU |
-| Text Embeddings | Sentence Transformers |
-| Retrieval | FAISS |
-| Backend | FastAPI |
-| Database | PostgreSQL |
-| Experiment Tracking | MLflow |
-| Demo UI | Streamlit |
-
----
-
-## Evaluation Metrics
-
-The system will be evaluated using:
-
-- Recall@K
-- MRR (Mean Reciprocal Rank)
-- NDCG@K
-- Diversity
-- Intent Shift Performance
-
----
-
-## Results
-
-| Model | Recall@5 | Recall@10 | MRR | NDCG@10 |
-|---------|---------|---------|---------|---------|
-| Popularity Baseline | - | - | - | - |
-| Item-KNN | - | - | - | - |
-| IntentRec | - | - | - | - |
-
----
-
-## Repository Structure
-
-```text
-intentrec/
-│
-├── data/
-├── notebooks/
-├── src/
-│   ├── data/
-│   ├── models/
-│   ├── retrieval/
-│   ├── ranking/
-│   ├── evaluation/
-│   └── api/
-│
-├── app/
-├── experiments/
-├── tests/
-└── README.md
-```
-
----
+1. Understand the dataset and session behavior
+2. Reproduce strong classical baselines
+3. Establish sequential recommendation baselines
+4. Identify failure cases
+5. Introduce explicit intent modeling
+6. Evaluate each component through controlled experiments
+7. Build the final recommendation system based on evidence
 
 ## Current Status
 
-🟡 In Development
+Phase: Research & Baseline Preparation
 
-### Completed
-- Project setup
-- Dataset acquisition
-- Initial data loading
-
-### In Progress
-- Dataset exploration
-- Session analysis
-- Baseline recommender implementation
-
-### Upcoming
-- Query embedding pipeline
-- GRU session encoder
-- FAISS retrieval system
-
----
-
-## Future Improvements
-
-- Multi-intent modeling
-- Diversity-aware ranking (MMR)
-- UMAP visualization
-- Real-time feedback adaptation
-- Docker deployment
-
----
-
-## Team
-
-**Tensor Titans**
-
-Building recommendation systems that understand intent, not just history.
+The final model architecture has NOT been fixed yet.
