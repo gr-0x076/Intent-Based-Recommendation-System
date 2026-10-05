@@ -9,66 +9,80 @@
 
 ---
 
-## 1. Project Overview & Motivation
+## 1. Project Overview & Research Question
 
-In e-commerce, user journeys are dynamic, fast-paced, and frequently anonymous. Traditional recommender systems depend heavily on long-term user profiles and static collaborative filtering. In practice, this creates major failure modes:
-1. **Historical Bias:** Recommending items a user already bought or was interested in weeks ago.
-2. **Context Blindness:** Inability to recognize that a user's goals change between morning work browsing and evening leisure shopping.
-3. **Severe Cold-Start:** When a user visits without an account or history, traditional systems fall back to generic popularity.
+Traditional recommender systems rely predominantly on long-term historical user profiles and static collaborative filtering. In modern e-commerce journeys, however, users browse anonymously, exhibit rapid goal shifts, and leave short interaction trails where historical profiles are unavailable or uninformative.
 
-Having studied classical recommendation techniques (collaborative filtering, matrix factorization) and sequential deep learning architectures (GRU4Rec, SASRec), this project designs an **Intent-Based Recommender System**. Rather than asking *"what did this user like in the past?"*, our system asks:
+This project investigates:
+> **Does explicitly modeling current-session user intent (via query vectors, interaction transitions, and commitment states) produce measurably better recommendations than sequence ordering and collaborative filtering alone?**
 
-> **"What is the user trying to achieve in this specific session right now?"**
-
-We formulate this as an **evidence-driven research investigation**, advancing through controlled experimental baselines before introducing multi-modal intent representations.
-
----
-
-## 2. How the Recommendation System Works
-
-### 2.1 What is a Recommender System?
-At its core, a recommender system is a ranking engine: given a catalog of tens of thousands of products and a stream of user actions (page views, clicks, searches, cart additions), it predicts the most relevant items the user will interact with next.
-
-### 2.2 Our Two-Stage Pipeline Architecture
-
-```text
-                  Current Session Actions
-      [Search: "running shoes"] → [View: Shoe A] → [View: Shoe B]
-                                 │
-                 ┌───────────────┴───────────────┐
-                 │                               │
-        Stage 1: Multi-Recall            Stage 1: Intent Retrieval
-       (ItemCF Co-occurrence)          (Semantic Query / Content Vector)
-                 │                               │
-                 └───────────────┬───────────────┘
-                                 │
-                   Merged Candidate Pool (~100 items)
-                                 │
-                 Stage 2: Intent-Aware Re-ranking
-             (Recency Decay + Action Escalation + Query Match)
-                                 │
-                    Top-20 Recommendations
+We follow a rigorous, **evidence-driven research methodology**:
+```
+Level 0: Global Popularity (Floor Baseline)
+   ↓
+Level 1: ItemCF (Session Co-occurrence + Exponential Recency Decay)
+   ↓
+Level 2: GRU4Rec (Sequential RNN Baseline)
+   ↓
+Level 3: Isolated Intent Experiments (Query Vectors, Behavioral Commitment States)
+   ↓
+Level 4: Dense Candidate Retrieval & Re-ranking (Only if empirically justified)
 ```
 
-* **Stage 1 (Fast Candidate Retrieval):** Scans the large product catalog ($66,000+$ items) in milliseconds to retrieve the top 100 candidate items using complementary retrieval strategies:
-  * *Session ItemCF:* Pulls items frequently viewed alongside recent session products.
-  * *Dense Intent Retrieval:* Pulls items semantically aligned with the user's active search query vector.
-* **Stage 2 (Intent-Aware Re-ranking):** Scores and re-ranks the candidates by evaluating behavioral recency, transition velocity, and stage of commitment (e.g., browsing vs. comparing vs. cart addition).
+---
+
+## 2. What is "Intent" in This System?
+
+To avoid treating "intent" as an ambiguous buzzword, this project operationalizes intent into **two distinct behavioral dimensions**:
+
+1. **Semantic / Goal Intent (Expressed via Queries & Categories):**
+   * What specific task or attribute is the user pursuing? (e.g., searching for *"waterproof hiking shoes"* vs. browsing casual footwear).
+   * *Signal:* 50-dimensional search query vectors and contextual URL navigation paths.
+
+2. **Commitment / Behavioral Stage (Expressed via Action Dynamics):**
+   * Is the user in **Exploration Mode** (discovering novel items across categories) or **Commitment Mode** (re-evaluating an examined product for cart addition or checkout)?
+   * *Signal:* Transition patterns between `pageview`, `detail`, `add-to-cart`, and repeat interaction velocity.
 
 ---
 
-## 3. Dataset & Empirical Discoveries
+## 3. Current Architecture Hypothesis
 
-We evaluate our research on a large-scale e-commerce dataset containing over **36 million user events** across ~5 million sessions:
+The architecture below represents our **working research hypothesis**, not an established conclusion. Components will be retained, adapted, or discarded based strictly on empirical ablation evidence.
+
+```text
+                                Current Session Actions
+                    [Search: "running shoes"] → [View: Shoe A] → [View: Shoe B]
+                                               │
+                               ┌───────────────┴───────────────┐
+                               │                               │
+                      Stage 1: Multi-Recall            Stage 1: Intent Retrieval
+                     (ItemCF Co-occurrence)          (Semantic Query / Content Vector)
+                               │                               │
+                               └───────────────┬───────────────┘
+                                               │
+                                 Merged Candidate Pool (~100 items)
+                                               │
+                               Stage 2: Intent-Aware Re-ranking
+                           (Recency Decay + Stage Adaptation + Query Match)
+                                               │
+                                  Top-20 Recommendations
+```
+
+* **Candidate Retrieval (Hypothesis):** Combining co-occurrence heuristics with semantic query retrieval will expand candidate recall, especially when active search signals an intent shift away from prior browsing.
+* **Re-ranking (Hypothesis):** Scoring candidates by explicitly distinguishing between discovery items (novel recommendations) and commitment items (repeat consideration) will bridge the gap between browsing and conversion.
+
+---
+
+## 4. Empirical Dataset Discoveries
+
+We conduct our research on a large-scale e-commerce dataset containing over **36 million user events** across ~5 million sessions:
 * `browsing_train.csv`: 36,079,308 browsing logs (pageviews, product detail views, cart additions, purchases).
-* `search_train.csv`: 819,517 on-site search events, each enriched with a 50-dimensional dense pre-trained query vector.
+* `search_train.csv`: 819,517 on-site search events, each with a 50-dimensional dense pre-trained query vector.
 * `sku_to_content.csv`: 66,386 catalog products with 50-dimensional product content vectors.
 
-### Critical Empirical Profiling Insights
+### Empirical Profiling (from 2M raw rows sample)
 
-Before writing any model code, we conducted data profiling across 2 million raw interactions to understand the actual session dynamics:
-
-1. **Cold-Start is the Dominant Reality:**
+1. **Cold-Start is the Dominant Mode:**
    * **0 product interactions:** 33.37% (91,671 sessions) — *Pure navigation / bounces.*
    * **1 product interaction:** 34.17% (93,860 sessions) — *Immediate departure after single view.*
    * **2 product interactions:** 10.30% (28,307 sessions) — *Single input, single target.*
@@ -80,16 +94,16 @@ Before writing any model code, we conducted data profiling across 2 million raw 
    * `detail` (product view): **27.5%**
    * `add` to cart: **0.9%** (present in only 4.3% of sessions)
    * `purchase`: **0.2%** (present in only 1.1% of sessions)
-   * **Takeaway:** The prediction target must be formulated as the *next product interaction*, while pageviews provide navigation context.
+   * **Takeaway:** The prediction target must be formulated as the *next product interaction*, preserving action type `(target_item, target_action)`.
 
 3. **Query Vector Characteristics:**
-   * Query vectors and product vectors share a 50-dimensional space, but empirical cosine similarity on clicked products is centered around zero (mean $\approx -0.0285$). Uncalibrated raw dot products do not work as zero-shot rankers; learned intent projection is required.
+   * Query vectors and product vectors share a 50-dimensional space, but direct cosine similarity on clicked products is centered around zero (mean $\approx -0.0285$). Initial analysis suggests that raw query-product similarity is not sufficiently aligned for zero-shot retrieval; learned alignment will be tested.
 
 ---
 
-## 4. Progress So Far: Official Baseline Ladder
+## 5. Official Baseline Ladder & Empirical Findings
 
-To rigorously test whether intent modeling genuinely adds value, we established a strict baseline ladder. All models are trained on 105,109 sessions and evaluated on the exact same **24,968 prefix-expanded validation examples** (chronological split) using our standardized evaluation harness (`src/evaluation/metrics.py`).
+All models are trained on 105,109 sessions and evaluated on the exact same **24,968 prefix-expanded validation examples** (chronological split) using our standardized evaluation harness (`src/evaluation/metrics.py`).
 
 ```
 =======================================================================================================================
@@ -100,27 +114,32 @@ Model                         MRR@20    Recall@20   Cold-1 MRR   Cold-2 MRR   Ri
 Level 0: Global Popularity    0.0017     0.0074       0.0008       0.0024       0.0019        0.0033       0.0015
 Level 1: ItemCF (Decay=0.7)   0.1440     0.2767       0.1875       0.1541       0.1171        0.1100       0.1480
 Level 2: GRU4Rec (PyTorch)    0.1161     0.2011       0.1525       0.1249       0.0934        0.0835       0.1199
+[Sanity] Repeat Last Item     0.1896     0.1896       0.2634       0.1871       0.1510        0.1923       0.1893
 =======================================================================================================================
 ```
 
-### Research Findings & Diagnostic Revelations
+### Critical Scientific Insights
 
-1. **Why ItemCF Outperforms Pure GRU4Rec in This Domain:**
+1. **Why ItemCF Outperforms GRU4Rec Under Our Current Setup:**
    * In sparse, short sessions ($77.8\%$ have $\le 2$ product interactions), direct statistical co-occurrence with recency decay ($0.7^j$) is a stronger inductive prior than neural sequence transitions learned from scratch on 10,630 items.
-   * A single-layer GRU struggles to generalize on sequences of length 1 or 2 items, confirming our hypothesis that complex neural sequence models require hybridization with collaborative heuristics.
+   * Our current single-layer GRU configuration underperforms ItemCF on this dataset and evaluation setup, particularly on early cold-start transitions ($0.1525$ vs $0.1875$).
 
-2. **The "Search Intent Deficit":**
+2. **Search-Session Performance Gap:**
    * **ItemCF:** Drops from **0.1480** (No-search) to **0.1100** (Has-search) — a **25.7% relative drop**.
    * **GRU4Rec:** Drops from **0.1199** (No-search) to **0.0835** (Has-search) — a **30.4% relative drop**.
-   * *Diagnosis:* When a user issues a search query, their goal shifts. Both baselines are blind to the search query vector and continue recommending based solely on past item views.
+   * *Hypothesis:* Search-containing sessions exhibit substantially lower recommendation performance across both baselines. We hypothesize that search query vectors provide explicit intent constraints that current behavioral baselines fail to utilize. (Confounders such as session length and exploratory user behavior will be analyzed).
 
-3. **The "Action Escalation Blindspot":**
-   * While ItemCF achieves $0.1530$ MRR on target `detail` views, it drops to **$0.0065$ on `add-to-cart`** and **$0.0181$ on `purchase`**.
-   * Transitioning from casual browsing to cart addition represents an intent escalation that neither co-occurrence nor pure sequence modeling captures.
+3. **Action-Target Gap & The Repeat-Item Discovery:**
+   * Under standard discovery evaluation with seen-item filtering (`filter_seen=True`), ItemCF scored **0.0065 on add-to-cart** and **0.0181 on purchase**.
+   * *Sanity Check Investigation:* Analyzing target distribution revealed that **95.0% of add-to-cart targets** and **94.3% of purchase targets** are items **already seen in the session prefix** (92.2% and 78.2% being the *exact last item viewed*).
+   * A trivial `Repeat Last Item` baseline achieves **0.9219 MRR on add-to-cart** and **0.7824 MRR on purchase**!
+   * *Core Implication:* Recommender systems require dual-mode intent modeling:
+     * **Discovery Intent (New Items):** Predicts novel items to explore (`filter_seen=True`).
+     * **Conversion Intent (Repeat Items):** Predicts when the user transitions from exploring to purchasing an examined item (`filter_seen=False`).
 
 ---
 
-## 5. Codebase Structure
+## 6. Codebase Structure
 
 ```
 intent-rec/
@@ -161,7 +180,7 @@ intent-rec/
 
 ---
 
-## 6. How to Reproduce
+## 7. How to Reproduce
 
 ### 1. Installation
 
@@ -189,16 +208,16 @@ python src/evaluation/run_benchmarks.py --data-dir data/processed/dev_3pct
 
 ---
 
-## 7. Current Project Status & Next Steps
+## 8. Current Project Status & Next Steps
 
 ```
 [Phase 0] Data Engineering & Evaluation Harness          ✅ COMPLETE
 [Phase 1] Level 0 (Popularity) & Level 1 (ItemCF)        ✅ COMPLETE (MRR: 0.1440)
 [Phase 2] Level 2 (GRU4Rec) Sequential Baseline          ✅ COMPLETE (MRR: 0.1161)
 [Phase 3] Isolated Intent Experiments                    🚀 CURRENT FOCUS
-    ├── 3A: Behavioral Action Progression Signals
-    ├── 3B: Search Query Vector Alignment (Targeting the 0.1100 search deficit)
+    ├── 3A: Dual-Mode Modeling (Discovery vs. Repeat Conversion)
+    ├── 3B: Search Query Vector Alignment (Targeting the 0.1100 search gap)
     └── 3C: Hybrid Intent Fusion
-[Phase 4] Dense Retrieval (FAISS) & Re-ranking (LightGBM) ⏳ PLANNED
+[Phase 4] Dense Retrieval & Re-ranking (FAISS / LightGBM)⏳ PLANNED (Only if justified)
 [Phase 5] Real-Time Interactive Demo (FastAPI + Streamlit)⏳ PLANNED
 ```
