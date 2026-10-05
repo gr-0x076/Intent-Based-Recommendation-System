@@ -1,10 +1,12 @@
 """
-Level 1 Baseline: Item-based Collaborative Filtering (ItemCF) with Position Decay.
-Adapted from SIGIR eCOM 2021 1st-place core principles:
-1. Item-to-item co-occurrence matrix normalized by session length.
-2. Exponential recency decay (0.7^j) giving higher weight to immediate recent items.
-3. Fallback to global popularity for cold-start / sparse items.
-4. Ban filter suppressing items already seen in current session input.
+Level 1 Baseline: Session-based Item Collaborative Filtering (ItemCF) with Position Decay.
+
+Core architecture:
+1. Item-to-item co-occurrence matrix normalized by inverse log session length.
+2. Pairwise distance decay within session to prioritize adjacent items.
+3. Exponential recency decay (0.7^j) giving higher weight to immediate recent items.
+4. Fallback to global popularity for cold-start / sparse items.
+5. Ban filter suppressing items already seen in the current session input.
 """
 
 import math

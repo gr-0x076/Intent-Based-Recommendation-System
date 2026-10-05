@@ -263,7 +263,7 @@ def save_processed_dataset(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Sample and process SIGIR dataset")
+    parser = argparse.ArgumentParser(description="Sample and process Coveo e-commerce session dataset")
     parser.add_argument("--browsing-path", type=str, default="/home/mohith/intent-rec/data/raw/browsing_train.csv")
     parser.add_argument("--search-path", type=str, default="/home/mohith/intent-rec/data/raw/search_train.csv")
     parser.add_argument("--output-dir", type=str, default="/home/mohith/intent-rec/data/processed")

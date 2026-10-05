@@ -177,7 +177,7 @@ These are the questions any evaluator, professor, mentor, or interviewer will as
 ### Q2: "What's your dataset? Where does real-world data come from?"
 
 **Answer:** You have three options:
-- **Competition datasets:** Coveo SIGIR 2021 (30M events) — exactly what the repo we studied uses
+- **Competition datasets:** Coveo SIGIR 2021 (30M events) — an industry-standard e-commerce benchmark
 - **Open datasets:** Amazon Review Data, MovieLens, Steam, Retailrocket
 - **Synthetic data:** Generate simulated user sessions with controlled intent patterns (good for demos)
 
@@ -194,7 +194,7 @@ For a college project: the Coveo SIGIR 2021 dataset or Retailrocket dataset is i
 
 ### Q4: "How is this different from a standard session-based recommender?"
 
-**Answer:** A standard session-based recommender (like the SIGIR repo) asks: *"Given recent interactions, what item comes next?"* — this is pure pattern matching. An intent-based recommender asks: *"What is the user trying to achieve, and what item best serves that goal?"* — this is goal inference. The difference is explicit intent modeling via embeddings vs. implicit pattern matching via co-occurrence statistics.
+**Answer:** A standard session-based recommender (like the baseline session models) asks: *"Given recent interactions, what item comes next?"* — this is pure pattern matching. An intent-based recommender asks: *"What is the user trying to achieve, and what item best serves that goal?"* — this is goal inference. The difference is explicit intent modeling via embeddings vs. implicit pattern matching via co-occurrence statistics.
 
 ### Q5: "Why not just use LLMs? Ask ChatGPT what to recommend?"
 

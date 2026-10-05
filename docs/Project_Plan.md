@@ -230,7 +230,7 @@ Expected MRR@20: ~0.02–0.05 (it's bad, but it's your floor)
 Expected MRR@20: slightly better than popularity
 
 **1.3 ItemCF (Co-occurrence Based)**  
-This is adapted directly from the SIGIR repo's `multi_recall.py`.
+This is adapted directly from established session-based co-occurrence heuristics's `multi_recall.py`.
 
 Core algorithm:
 ```python
@@ -246,10 +246,10 @@ Core algorithm:
 #   Return top-20 by score
 ```
 
-- Build on SIGIR repo code but adapt to your evaluation harness
+- Build on baseline co-occurrence models code but adapt to your evaluation harness
 - Track: MRR@20, Recall@20
 
-**1.4 URL-based CF (from SIGIR repo)**  
+**1.4 URL-based CF (from baseline co-occurrence models)**  
 Only if Coveo data is available (URL field exists). Skip on OTTO.
 
 **Baseline Results Table** (fill in during experiments):
