@@ -1,136 +1,125 @@
-from __future__ import annotations
-import math
-from typing import List
+"""
+Evaluation metrics and harness for Intent-Based Session Recommender.
+Implements:
+- MRR@K (Mean Reciprocal Rank)
+- Recall@K
+- Segmented metrics by:
+  * Prior product count (cold-start: 1, 2, vs rich: 3+)
+  * Presence of search query in input
+  * Target action type (detail, add, purchase)
+"""
+
+from typing import List, Dict, Any, Optional
+import numpy as np
 
 
-def recall_at_k(predictions: List[List[str]], ground_truth: List[str], k: int) -> float:
-    """
-    Compute Recall@K averaged over all sessions.
-
-    predictions: list of ranked item id lists (one per session)
-    ground_truth: list of correct next item ids (one per session)
-    k: rank cutoff
-    returns: float in [0, 1]
-    """
-    if not ground_truth:
+def compute_reciprocal_rank(predictions: List[str], target_item: str, k: int = 20) -> float:
+    """Computes Reciprocal Rank (1/rank) if target is in top-K predictions, else 0.0."""
+    top_k = predictions[:k]
+    try:
+        idx = top_k.index(target_item)
+        return 1.0 / (idx + 1)
+    except ValueError:
         return 0.0
-    hits = sum(1 for pred, gt in zip(predictions, ground_truth) if gt in pred[:k])
-    return hits / len(ground_truth)
 
 
-def mrr(predictions: List[List[str]], ground_truth: List[str]) -> float:
-    """
-    Compute Mean Reciprocal Rank.
-
-    predictions: list of ranked item id lists (one per session)
-    ground_truth: list of correct next item ids (one per session)
-    returns: float in [0, 1]
-    """
-    if not ground_truth:
-        return 0.0
-    rr_scores = []
-    for pred, gt in zip(predictions, ground_truth):
-        try:
-            rank = pred.index(gt) + 1
-            rr_scores.append(1.0 / rank)
-        except ValueError:
-            rr_scores.append(0.0)
-    return sum(rr_scores) / len(rr_scores)
+def compute_hit(predictions: List[str], target_item: str, k: int = 20) -> float:
+    """Computes Hit (1.0 if target in top-K, else 0.0)."""
+    return 1.0 if target_item in predictions[:k] else 0.0
 
 
-def ndcg_at_k(predictions: List[List[str]], ground_truth: List[str], k: int) -> float:
-    """
-    Compute NDCG@K averaged over all sessions.
-    Assumes single relevant item per session (binary relevance).
-    IDCG = 1/log2(2) = 1.0 (ideal: relevant item at rank 1).
+class EvaluationHarness:
+    def __init__(self, k: int = 20):
+        self.k = k
 
-    predictions: list of ranked item id lists (one per session)
-    ground_truth: list of correct next item ids (one per session)
-    k: rank cutoff
-    returns: float in [0, 1]
-    """
-    if not ground_truth:
-        return 0.0
-    scores = []
-    for pred, gt in zip(predictions, ground_truth):
-        dcg = 0.0
-        for i, item in enumerate(pred[:k]):
-            if item == gt:
-                dcg = 1.0 / math.log2(i + 2)
-                break
-        scores.append(dcg)
-    return sum(scores) / len(scores)
+    def evaluate(self, model: Any, test_examples: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Evaluates a model over a list of test examples.
+        Each example dict must contain:
+          - 'input_events': list of events up to target
+          - 'target_item_id': str
+          - 'target_action': str (detail/add/purchase)
+          - 'n_prior_products': int
+          - 'has_search': bool
+        """
+        assert len(test_examples) > 0, "No test examples provided"
 
+        all_rr = []
+        all_hits = []
 
-def evaluate_all(predictions: List[List[str]], ground_truth: List[str]) -> dict:
-    """
-    Run the full standard evaluation suite.
+        segments = {
+            "cold_start_1": {"rr": [], "hits": []},  # exactly 1 prior product interaction
+            "cold_start_2": {"rr": [], "hits": []},  # exactly 2 prior product interactions
+            "rich_3plus":   {"rr": [], "hits": []},  # 3 or more prior product interactions
+            "has_search":   {"rr": [], "hits": []},  # input has >=1 search event
+            "no_search":    {"rr": [], "hits": []},  # input has 0 search events
+            "target_detail": {"rr": [], "hits": []},
+            "target_add":    {"rr": [], "hits": []},
+            "target_purchase": {"rr": [], "hits": []},
+        }
 
-    returns: dict with keys recall@5, recall@10, recall@20, mrr, ndcg@10
-    """
-    return {
-        "recall@5": recall_at_k(predictions, ground_truth, 5),
-        "recall@10": recall_at_k(predictions, ground_truth, 10),
-        "recall@20": recall_at_k(predictions, ground_truth, 20),
-        "mrr": mrr(predictions, ground_truth),
-        "ndcg@10": ndcg_at_k(predictions, ground_truth, 10),
-    }
+        for ex in test_examples:
+            target = ex["target_item_id"]
+            preds = model.predict(ex["input_events"], top_k=self.k)
 
+            rr = compute_reciprocal_rank(preds, target, self.k)
+            hit = compute_hit(preds, target, self.k)
 
-def evaluate_intent_shift_sessions(
-    predictions: List[List[str]],
-    ground_truth: List[str],
-    is_shift_session: List[bool],
-) -> dict:
-    """
-    Separately evaluate intent-shift sessions vs normal sessions.
+            all_rr.append(rr)
+            all_hits.append(hit)
 
-    is_shift_session: parallel boolean list — True if the session contains an intent shift
-    returns: dict with keys 'intent_shift' and 'normal', each containing evaluate_all output
-    """
-    shift_preds, shift_gt = [], []
-    normal_preds, normal_gt = [], []
+            n_p = ex.get("n_prior_products", 0)
+            if n_p == 1:
+                segments["cold_start_1"]["rr"].append(rr)
+                segments["cold_start_1"]["hits"].append(hit)
+            elif n_p == 2:
+                segments["cold_start_2"]["rr"].append(rr)
+                segments["cold_start_2"]["hits"].append(hit)
+            else:
+                segments["rich_3plus"]["rr"].append(rr)
+                segments["rich_3plus"]["hits"].append(hit)
 
-    for pred, gt, is_shift in zip(predictions, ground_truth, is_shift_session):
-        if is_shift:
-            shift_preds.append(pred)
-            shift_gt.append(gt)
-        else:
-            normal_preds.append(pred)
-            normal_gt.append(gt)
+            if ex.get("has_search", False):
+                segments["has_search"]["rr"].append(rr)
+                segments["has_search"]["hits"].append(hit)
+            else:
+                segments["no_search"]["rr"].append(rr)
+                segments["no_search"]["hits"].append(hit)
 
-    return {
-        "intent_shift": evaluate_all(shift_preds, shift_gt) if shift_gt else {},
-        "normal": evaluate_all(normal_preds, normal_gt) if normal_gt else {},
-    }
+            action = ex.get("target_action", "detail")
+            act_key = f"target_{action}"
+            if act_key in segments:
+                segments[act_key]["rr"].append(rr)
+                segments[act_key]["hits"].append(hit)
 
+        results = {
+            f"MRR@{self.k}": float(np.mean(all_rr)),
+            f"Recall@{self.k}": float(np.mean(all_hits)),
+            "total_examples": len(all_rr),
+            "segments": {}
+        }
 
-if __name__ == "__main__":
-    # fmt: off
-    predictions = [
-        ["item_3", "item_1", "item_5", "item_2", "item_4", "item_7", "item_8", "item_9", "item_10", "item_11",
-         "item_12", "item_13", "item_14", "item_15", "item_16", "item_17", "item_18", "item_19", "item_20", "item_21"],
-        ["item_1", "item_2", "item_3", "item_4", "item_5", "item_6", "item_7", "item_8", "item_9", "item_10",
-         "item_11", "item_12", "item_13", "item_14", "item_15", "item_16", "item_17", "item_18", "item_19", "item_20"],
-        ["item_9", "item_8", "item_7", "item_6", "item_5", "item_4", "item_3", "item_2", "item_1", "item_0",
-         "item_10", "item_11", "item_12", "item_13", "item_14", "item_15", "item_16", "item_17", "item_18", "item_19"],
-        ["item_0", "item_1", "item_2", "item_3", "item_4", "item_5", "item_6", "item_7", "item_8", "item_9",
-         "item_10", "item_11", "item_12", "item_13", "item_14", "item_15", "item_16", "item_17", "item_18", "item_19"],
-        ["item_5", "item_6", "item_7", "item_8", "item_9", "item_10", "item_11", "item_12", "item_13", "item_14",
-         "item_15", "item_16", "item_17", "item_18", "item_19", "item_20", "item_21", "item_22", "item_23", "item_24"],
-    ]
-    # fmt: on
-    ground_truth = ["item_1", "item_5", "item_7", "item_0", "item_99"]
-    is_shift = [True, False, True, False, True]
+        for seg_name, data in segments.items():
+            count = len(data["rr"])
+            if count > 0:
+                results["segments"][seg_name] = {
+                    f"MRR@{self.k}": float(np.mean(data["rr"])),
+                    f"Recall@{self.k}": float(np.mean(data["hits"])),
+                    "count": count,
+                    "pct_of_total": round(100.0 * count / len(all_rr), 2)
+                }
 
-    print("=== evaluate_all ===")
-    results = evaluate_all(predictions, ground_truth)
-    for metric, value in results.items():
-        print(f"  {metric}: {value:.4f}")
+        return results
 
-    print("\n=== evaluate_intent_shift_sessions ===")
-    shift_results = evaluate_intent_shift_sessions(predictions, ground_truth, is_shift)
-    for split, metrics in shift_results.items():
-        print(f"\n  [{split}]")
-        for metric, value in metrics.items():
-            print(f"    {metric}: {value:.4f}")
+    def print_report(self, results: Dict[str, Any], model_name: str = "Model"):
+        print(f"\n=======================================================")
+        print(f"  EVALUATION REPORT: {model_name} (Total: {results['total_examples']:,} examples)")
+        print(f"=======================================================")
+        print(f"  Overall MRR@{self.k}:    {results[f'MRR@{self.k}']:.4f}")
+        print(f"  Overall Recall@{self.k}: {results[f'Recall@{self.k}']:.4f}")
+        print(f"-------------------------------------------------------")
+        print(f"  {'Segment':<18} | {'Count':<7} | {'% Total':<7} | {'MRR@' + str(self.k):<8} | {'Recall@' + str(self.k)}")
+        print(f"-------------------------------------------------------")
+        for seg, vals in results["segments"].items():
+            print(f"  {seg:<18} | {vals['count']:<7} | {vals['pct_of_total']:<6}% | {vals[f'MRR@{self.k}']:.4f}   | {vals[f'Recall@{self.k}']:.4f}")
+        print(f"=======================================================\n")
