@@ -3,10 +3,13 @@ Evaluation metrics and harness for Intent-Based Session Recommender.
 Implements:
 - MRR@K (Mean Reciprocal Rank)
 - Recall@K
-- Segmented metrics by:
-  * Prior product count (cold-start: 1, 2, vs rich: 3+)
-  * Presence of search query in input
-  * Target action type (detail, add, purchase)
+- Granular Segmented reporting:
+  * Prior product count (cold_start_1, cold_start_2, rich_3plus)
+  * Search presence (has_search, no_search)
+  * Target action type (target_detail, target_add, target_purchase)
+  * Dual Evaluation Modes:
+    - discovery_unseen: target item NOT seen in input history
+    - conversion_repeat: target item WAS seen in input history
 """
 
 from typing import List, Dict, Any, Optional
@@ -48,14 +51,16 @@ class EvaluationHarness:
         all_hits = []
 
         segments = {
-            "cold_start_1": {"rr": [], "hits": []},  # exactly 1 prior product interaction
-            "cold_start_2": {"rr": [], "hits": []},  # exactly 2 prior product interactions
-            "rich_3plus":   {"rr": [], "hits": []},  # 3 or more prior product interactions
-            "has_search":   {"rr": [], "hits": []},  # input has >=1 search event
-            "no_search":    {"rr": [], "hits": []},  # input has 0 search events
-            "target_detail": {"rr": [], "hits": []},
-            "target_add":    {"rr": [], "hits": []},
-            "target_purchase": {"rr": [], "hits": []},
+            "cold_start_1": {"rr": [], "hits": []},      # exactly 1 prior product interaction
+            "cold_start_2": {"rr": [], "hits": []},      # exactly 2 prior product interactions
+            "rich_3plus":   {"rr": [], "hits": []},      # 3 or more prior product interactions
+            "has_search":   {"rr": [], "hits": []},      # input has >=1 search event
+            "no_search":    {"rr": [], "hits": []},      # input has 0 search events
+            "discovery_unseen":  {"rr": [], "hits": []}, # target item not in input history
+            "conversion_repeat": {"rr": [], "hits": []}, # target item was in input history
+            "target_detail":     {"rr": [], "hits": []},
+            "target_add":        {"rr": [], "hits": []},
+            "target_purchase":   {"rr": [], "hits": []},
         }
 
         for ex in test_examples:
@@ -68,6 +73,7 @@ class EvaluationHarness:
             all_rr.append(rr)
             all_hits.append(hit)
 
+            # Prior product counts
             n_p = ex.get("n_prior_products", 0)
             if n_p == 1:
                 segments["cold_start_1"]["rr"].append(rr)
@@ -79,6 +85,7 @@ class EvaluationHarness:
                 segments["rich_3plus"]["rr"].append(rr)
                 segments["rich_3plus"]["hits"].append(hit)
 
+            # Search presence
             if ex.get("has_search", False):
                 segments["has_search"]["rr"].append(rr)
                 segments["has_search"]["hits"].append(hit)
@@ -86,6 +93,16 @@ class EvaluationHarness:
                 segments["no_search"]["rr"].append(rr)
                 segments["no_search"]["hits"].append(hit)
 
+            # Dual-mode: Discovery (unseen) vs Conversion (repeat)
+            seen_items = {e["item_id"] for e in ex["input_events"] if e.get("item_id")}
+            if target in seen_items:
+                segments["conversion_repeat"]["rr"].append(rr)
+                segments["conversion_repeat"]["hits"].append(hit)
+            else:
+                segments["discovery_unseen"]["rr"].append(rr)
+                segments["discovery_unseen"]["hits"].append(hit)
+
+            # Action breakdown
             action = ex.get("target_action", "detail")
             act_key = f"target_{action}"
             if act_key in segments:
@@ -118,8 +135,8 @@ class EvaluationHarness:
         print(f"  Overall MRR@{self.k}:    {results[f'MRR@{self.k}']:.4f}")
         print(f"  Overall Recall@{self.k}: {results[f'Recall@{self.k}']:.4f}")
         print(f"-------------------------------------------------------")
-        print(f"  {'Segment':<18} | {'Count':<7} | {'% Total':<7} | {'MRR@' + str(self.k):<8} | {'Recall@' + str(self.k)}")
+        print(f"  {'Segment':<19} | {'Count':<7} | {'% Total':<7} | {'MRR@' + str(self.k):<8} | {'Recall@' + str(self.k)}")
         print(f"-------------------------------------------------------")
         for seg, vals in results["segments"].items():
-            print(f"  {seg:<18} | {vals['count']:<7} | {vals['pct_of_total']:<6}% | {vals[f'MRR@{self.k}']:.4f}   | {vals[f'Recall@{self.k}']:.4f}")
+            print(f"  {seg:<19} | {vals['count']:<7} | {vals['pct_of_total']:<6}% | {vals[f'MRR@{self.k}']:.4f}   | {vals[f'Recall@{self.k}']:.4f}")
         print(f"=======================================================\n")

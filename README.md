@@ -5,7 +5,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c.svg)](https://pytorch.org/)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Status: Phase 2 Complete](https://img.shields.io/badge/Status-Phase%202%20Complete-brightgreen.svg)]()
+[![Status: Phase 3 In Progress](https://img.shields.io/badge/Status-Phase%203%20In%20Progress-blue.svg)]()
 
 ---
 
@@ -22,9 +22,11 @@ Level 0: Global Popularity (Floor Baseline)
    ↓
 Level 1: ItemCF (Session Co-occurrence + Exponential Recency Decay)
    ↓
-Level 2: GRU4Rec (Sequential RNN Baseline)
+Level 2: Pure GRU4Rec (Sequential RNN Baseline)
    ↓
-Level 3: Isolated Intent Experiments (Query Vectors, Behavioral Commitment States)
+Level 3A: GRU + Raw Features (Control: Concatenated Action + Query Vectors)
+   ↓
+Level 3B: GRU + Latent Intent Bottleneck (Treatment: Learned Intent Abstraction)
    ↓
 Level 4: Dense Candidate Retrieval & Re-ranking (Only if empirically justified)
 ```
@@ -35,12 +37,12 @@ Level 4: Dense Candidate Retrieval & Re-ranking (Only if empirically justified)
 
 To avoid treating "intent" as an ambiguous buzzword, this project operationalizes intent into **two distinct behavioral dimensions**:
 
-1. **Semantic / Goal Intent (Expressed via Queries & Categories):**
+1. **Semantic / Goal Intent (Expressed via Queries & Navigation):**
    * What specific task or attribute is the user pursuing? (e.g., searching for *"waterproof hiking shoes"* vs. browsing casual footwear).
    * *Signal:* 50-dimensional search query vectors and contextual URL navigation paths.
 
 2. **Commitment / Behavioral Stage (Expressed via Action Dynamics):**
-   * Is the user in **Exploration Mode** (discovering novel items across categories) or **Commitment Mode** (re-evaluating an examined product for cart addition or checkout)?
+   * Is the user in **Discovery Mode** (exploring novel items across categories) or **Conversion Mode** (re-evaluating an examined product for cart addition or checkout)?
    * *Signal:* Transition patterns between `pageview`, `detail`, `add-to-cart`, and repeat interaction velocity.
 
 ---
@@ -101,41 +103,47 @@ We conduct our research on a large-scale e-commerce dataset containing over **36
 
 ---
 
-## 5. Official Baseline Ladder & Empirical Findings
+## 5. Official Benchmark Ladder & Empirical Findings
 
 All models are trained on 105,109 sessions and evaluated on the exact same **24,968 prefix-expanded validation examples** (chronological split) using our standardized evaluation harness (`src/evaluation/metrics.py`).
 
 ```
-=======================================================================================================================
+========================================================================================================================================
                                              OFFICIAL BENCHMARK LADDER (N = 24,968)
-=======================================================================================================================
-Model                         MRR@20    Recall@20   Cold-1 MRR   Cold-2 MRR   Rich 3+ MRR   Has-Search   No-Search
------------------------------------------------------------------------------------------------------------------------
-Level 0: Global Popularity    0.0017     0.0074       0.0008       0.0024       0.0019        0.0033       0.0015
-Level 1: ItemCF (Decay=0.7)   0.1440     0.2767       0.1875       0.1541       0.1171        0.1100       0.1480
-Level 2: GRU4Rec (PyTorch)    0.1161     0.2011       0.1525       0.1249       0.0934        0.0835       0.1199
-[Sanity] Repeat Last Item     0.1896     0.1896       0.2634       0.1871       0.1510        0.1923       0.1893
-=======================================================================================================================
+========================================================================================================================================
+Model                         MRR@20    Recall@20   Cold-1 MRR   Cold-2 MRR   Rich 3+ MRR   Has-Search   No-Search   Discovery   Conversion
+----------------------------------------------------------------------------------------------------------------------------------------
+Level 0: Global Popularity    0.0017     0.0074       0.0008       0.0024       0.0019        0.0033       0.0015     0.0028      0.0000
+Level 1: ItemCF (Decay=0.7)   0.1440     0.2767       0.1875       0.1541       0.1171        0.1100       0.1480     0.2489      0.0000
+Level 2: Pure GRU4Rec (RNN)   0.1161     0.2011       0.1525       0.1249       0.0934        0.0835       0.1199     0.1944      0.0000
+Level 3A: GRU + Raw Features  0.1216     0.2130       0.1609       0.1300       0.0974        0.0896       0.1253     0.2035      0.0000
+[Sanity] Repeat Last Item     0.1896     0.1896       0.2634       0.1871       0.1510        0.1923       0.1893     0.0000      0.4708
+========================================================================================================================================
 ```
 
 ### Critical Scientific Insights
 
-1. **Why ItemCF Outperforms GRU4Rec Under Our Current Setup:**
+1. **Model 3A (Control) Performance:**
+   * Adding raw action embeddings (16-D) and search query projections (32-D) via standard concatenation improves GRU performance from **0.1161 to 0.1216 MRR@20** ($+4.7\%$ relative gain).
+   * **The Phase 3 Test:** Model 3A establishes the essential control baseline. When Model 3B (Latent Intent Bottleneck) is evaluated, the hypothesis test is **3B vs. 3A (0.1216)**. Only gains exceeding $0.1216$ can be scientifically attributed to intent abstraction rather than simple feature augmentation.
+
+2. **Why ItemCF Outperforms GRU4Rec Under Our Current Setup:**
    * In sparse, short sessions ($77.8\%$ have $\le 2$ product interactions), direct statistical co-occurrence with recency decay ($0.7^j$) is a stronger inductive prior than neural sequence transitions learned from scratch on 10,630 items.
-   * Our current single-layer GRU configuration underperforms ItemCF on this dataset and evaluation setup, particularly on early cold-start transitions ($0.1525$ vs $0.1875$).
+   * Our current single-layer GRU configurations (both pure sequence at $0.1161$ and feature-augmented at $0.1216$) trail ItemCF on early cold-start transitions ($0.1609$ vs $0.1875$).
 
-2. **Search-Session Performance Gap:**
-   * **ItemCF:** Drops from **0.1480** (No-search) to **0.1100** (Has-search) — a **25.7% relative drop**.
-   * **GRU4Rec:** Drops from **0.1199** (No-search) to **0.0835** (Has-search) — a **30.4% relative drop**.
-   * *Hypothesis:* Search-containing sessions exhibit substantially lower recommendation performance across both baselines. We hypothesize that search query vectors provide explicit intent constraints that current behavioral baselines fail to utilize. (Confounders such as session length and exploratory user behavior will be analyzed).
+3. **Stratified Search-Session Analysis (Controlling for Confounders):**
+   * **Unstratified Gap:** ItemCF drops from **0.1480** (No-search) to **0.1100** (Has-search).
+   * **Confounder Isolated:** 97.8% of searches occur in long sessions (`len_6_plus`).
+   * **Controlled Delta:** ItemCF performance remains lower on search sessions even after controlling for session length, but the effect is much smaller than the raw comparison suggests:
+     $$\Delta \text{ MRR@20} = -0.0138, \quad 95\% \text{ bootstrap CI } [-0.0256, -0.0024]$$
 
-3. **Action-Target Gap & The Repeat-Item Discovery:**
+4. **Action-Target Gap & The Repeat-Item Discovery:**
    * Under standard discovery evaluation with seen-item filtering (`filter_seen=True`), ItemCF scored **0.0065 on add-to-cart** and **0.0181 on purchase**.
    * *Sanity Check Investigation:* Analyzing target distribution revealed that **95.0% of add-to-cart targets** and **94.3% of purchase targets** are items **already seen in the session prefix** (92.2% and 78.2% being the *exact last item viewed*).
    * A trivial `Repeat Last Item` baseline achieves **0.9219 MRR on add-to-cart** and **0.7824 MRR on purchase**!
-   * *Core Implication:* Recommender systems require dual-mode intent modeling:
-     * **Discovery Intent (New Items):** Predicts novel items to explore (`filter_seen=True`).
-     * **Conversion Intent (Repeat Items):** Predicts when the user transitions from exploring to purchasing an examined item (`filter_seen=False`).
+   * *Dual-Mode Requirement:* Recommender systems require dual-mode intent modeling:
+     * **Discovery Intent (New Items):** Predicts novel items to explore ($59.7\%$ of cases, ItemCF MRR = 0.2489).
+     * **Conversion Intent (Repeat Items):** Predicts when the user transitions from exploring to purchasing an examined item ($40.3\%$ of cases, Repeat Prior MRR = 0.4708).
 
 ---
 
@@ -159,6 +167,7 @@ intent-rec/
 │   │   ├── popularity.py     # Level 0: Global popularity with seen-item filter
 │   │   ├── itemcf.py         # Level 1: Normalized ItemCF with 0.7^j recency decay
 │   │   ├── gru4rec.py        # Level 2: Canonical PyTorch GRU sequence model
+│   │   ├── gru4rec_features.py# Level 3A: GRU + Raw Features (Phase 3 Control)
 │   │   ├── session_encoder.py# Neural session encoder module
 │   │   └── train.py          # Training loop utilities
 │   ├── retrieval/
@@ -166,7 +175,7 @@ intent-rec/
 │   ├── api/
 │   │   └── main.py           # FastAPI real-time serving endpoints
 │   └── evaluation/
-│       ├── metrics.py        # Standardized evaluation harness (MRR@K, Recall@K, segments)
+│       ├── metrics.py        # Standardized evaluation harness (MRR@K, Recall@K, dual-mode segments)
 │       └── run_benchmarks.py # Automated multi-model benchmark runner
 ├── notebooks/
 │   ├── 01_eda.ipynb          # Exploratory data analysis notebook
@@ -215,9 +224,9 @@ python src/evaluation/run_benchmarks.py --data-dir data/processed/dev_3pct
 [Phase 1] Level 0 (Popularity) & Level 1 (ItemCF)        ✅ COMPLETE (MRR: 0.1440)
 [Phase 2] Level 2 (GRU4Rec) Sequential Baseline          ✅ COMPLETE (MRR: 0.1161)
 [Phase 3] Isolated Intent Experiments                    🚀 CURRENT FOCUS
-    ├── 3A: Dual-Mode Modeling (Discovery vs. Repeat Conversion)
-    ├── 3B: Search Query Vector Alignment (Targeting the 0.1100 search gap)
-    └── 3C: Hybrid Intent Fusion
+    ├── 3A: GRU + Raw Features Control                   ✅ COMPLETE (MRR: 0.1216)
+    ├── 3B: GRU + Latent Intent Bottleneck               ⏳ NEXT (The 3B vs 3A Test)
+    └── 3C: Dual-Mode Intent Fusion (Discovery vs Conversion)
 [Phase 4] Dense Retrieval & Re-ranking (FAISS / LightGBM)⏳ PLANNED (Only if justified)
 [Phase 5] Real-Time Interactive Demo (FastAPI + Streamlit)⏳ PLANNED
 ```
