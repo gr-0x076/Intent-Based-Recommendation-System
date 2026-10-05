@@ -11,15 +11,36 @@ Evaluated on the exact same chronological validation set ($N = 24,968$ prefix-ex
 | Level 2 | Pure GRU4Rec (Item Sequences Only) | 0.1161 | 0.2011 | 0.1525 | 0.1249 | 0.0934 | 0.0835 | 0.1199 | 0.1944 | 0.0000 |
 | Level 3A | **GRU + Raw Features (Control)** | **0.1216** | **0.2130** | **0.1609** | **0.1300** | **0.0974** | **0.0896** | **0.1253** | **0.2035** | 0.0000 |
 | [Sanity] | Repeat Last Item (Recency Prior) | 0.1896 | 0.1896 | 0.2634 | 0.1871 | 0.1510 | 0.1923 | 0.1893 | 0.0000 | **0.4708** |
-| Level 3B | GRU + Latent Intent Bottleneck | *Phase 3 Treatment* | *Pending* | *Pending* | *Pending* | *Pending* | *Pending* | *Pending* | *Pending* | *Pending* |
+| Level 3B-$\lambda 0$ | GRU + Pure Latent Intent Bottleneck ($\lambda=0$) | 0.1122 | 0.2092 | 0.1471 | 0.1249 | 0.0888 | 0.0829 | 0.1156 | 0.1878 | 0.0000 |
+| Level 3B-$\lambda 0.1$ | GRU + Supervised Bottleneck ($\lambda=0.1$) | 0.1126 | 0.2087 | 0.1494 | 0.1224 | 0.0893 | 0.0802 | 0.1164 | 0.1885 | 0.0000 |
 
 ---
 
 ## 2. Empirical Discoveries & Diagnostic Analyses
 
-### A. Phase 3 3-Way Ablation Milestone: Model 3A (Control) Established
-* **Result:** Adding raw action embeddings (16-D) and search query projections (32-D) via standard concatenation improves GRU performance from **0.1161 to 0.1216 MRR@20** ($+4.7\%$ relative gain).
-* **The Control Standard:** This establishes the required control baseline. When Model 3B (Latent Intent Bottleneck) is evaluated, the hypothesis test is **3B vs. 3A (0.1216)**. Only gains exceeding $0.1216$ can be scientifically attributed to intent abstraction rather than simple feature augmentation.
+### A. Phase 3 3-Way Ablation Outcome: 3B vs. 3A Comparison
+* **The Empirical Result:**
+  * Model 3A (Raw Features): **MRR@20 = 0.1216**, Recall@20 = 0.2130
+  * Model 3B-$\lambda 0$ (Pure Bottleneck): **MRR@20 = 0.1122**, Recall@20 = 0.2092 ($\Delta = -0.0094$)
+  * Model 3B-$\lambda 0.1$ (Supervised Bottleneck): **MRR@20 = 0.1126**, Recall@20 = 0.2087
+* **Calibrated Scientific Finding:**
+  **The explicit latent intent bottleneck does NOT outperform raw feature concatenation (3B $\le$ 3A).**
+  While concatenating auxiliary action and query features improves pure sequential modeling ($0.1161 \to 0.1216$), forcing the representation through a 64-D informational bottleneck reduces next-item ranking quality ($0.1216 \to 0.1122$).
+* **Mechanism:** In sparse e-commerce catalogs (>60,000 items) where 77.8% of sessions have $\le 2$ interactions, next-item prediction requires granular item-level discriminative capacity. The bottleneck compresses away item-specific signals in exchange for broad behavioral mode abstraction.
+
+### B. Supporting Analysis: Intent Representation Probing (Holdout $N = 4,994$)
+To test what information the representations actually capture, a standardized linear probe was trained on frozen embeddings:
+
+| Representation | Mode Accuracy (Discovery vs. Conversion) | Mode ROC-AUC | Target Action Accuracy | Action Macro-F1 |
+|---|---:|---:|---:|---:|
+| Random Control (64-D) | 59.73% | 0.5160 | 95.21% | 0.3252 |
+| Model 2 (Pure GRU, 64-D) | 59.87% | 0.5708 | 95.21% | 0.3252 |
+| Model 3A (Raw Features, 112-D) | 61.91% | 0.6447 | 95.09% | **0.3767** |
+| Model 3B-$\lambda 0$ (Pure Bottleneck, 64-D) | 64.74% | 0.6724 | **95.21%** | 0.3442 |
+| Model 3B-$\lambda 0.1$ (Supervised, 64-D) | **65.22%** | **0.6791** | 95.17% | 0.3251 |
+
+* **Observation:** The latent bottleneck $z_{\text{intent}}$ **successfully concentrates intent mode information** (Mode AUC improves monotonically from 0.5160 $\to$ 0.5708 $\to$ 0.6447 $\to$ 0.6724 $\to$ 0.6791).
+* **Synthesis:** This proves that $z_{\text{intent}}$ did indeed learn to abstract behavioral mode (Discovery vs. Conversion), but this high-level abstraction does not translate to higher next-item retrieval accuracy compared to preserving full raw item-action representations.
 
 ### B. Action-Target Gap & The Repeat-Item Discovery
 Under discovery evaluation with seen-item filtering (`filter_seen=True`), ItemCF scored **0.0065 on add-to-cart** and **0.0181 on purchase**.

@@ -220,3 +220,21 @@ class GRU4RecRecommender:
                     break
 
         return recommendations[:top_k]
+
+    def extract_representation(self, input_events: List[Dict[str, Any]]) -> np.ndarray:
+        if self.model is None or torch is None:
+            return np.zeros(self.hidden_dim, dtype=np.float32)
+
+        unk_idx = self.item2idx.get("<UNK>", 1)
+        prod_indices = [self.item2idx.get(e["item_id"], unk_idx) for e in input_events if e.get("item_id")]
+        if not prod_indices:
+            return np.zeros(self.hidden_dim, dtype=np.float32)
+
+        seq = prod_indices[-20:]
+        padded = [0] * (20 - len(seq)) + seq
+        tensor_x = torch.tensor([padded], dtype=torch.long, device=self.device)
+
+        with torch.no_grad():
+            embeds = self.model.item_embedding(tensor_x)
+            _, h_n = self.model.gru(embeds)
+            return h_n.squeeze(0).squeeze(0).cpu().numpy()

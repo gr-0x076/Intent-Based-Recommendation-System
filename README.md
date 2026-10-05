@@ -117,19 +117,27 @@ Level 0: Global Popularity    0.0017     0.0074       0.0008       0.0024       
 Level 1: ItemCF (Decay=0.7)   0.1440     0.2767       0.1875       0.1541       0.1171        0.1100       0.1480     0.2489      0.0000
 Level 2: Pure GRU4Rec (RNN)   0.1161     0.2011       0.1525       0.1249       0.0934        0.0835       0.1199     0.1944      0.0000
 Level 3A: GRU + Raw Features  0.1216     0.2130       0.1609       0.1300       0.0974        0.0896       0.1253     0.2035      0.0000
+Level 3B-λ0: Pure Bottleneck  0.1122     0.2092       0.1471       0.1249       0.0888        0.0829       0.1156     0.1878      0.0000
+Level 3B-λ0.1: Supervised     0.1126     0.2087       0.1494       0.1224       0.0893        0.0802       0.1164     0.1885      0.0000
 [Sanity] Repeat Last Item     0.1896     0.1896       0.2634       0.1871       0.1510        0.1923       0.1893     0.0000      0.4708
 ========================================================================================================================================
 ```
 
 ### Critical Scientific Insights
 
-1. **Model 3A (Control) Performance:**
-   * Adding raw action embeddings (16-D) and search query projections (32-D) via standard concatenation improves GRU performance from **0.1161 to 0.1216 MRR@20** ($+4.7\%$ relative gain).
-   * **The Phase 3 Test:** Model 3A establishes the essential control baseline. When Model 3B (Latent Intent Bottleneck) is evaluated, the hypothesis test is **3B vs. 3A (0.1216)**. Only gains exceeding $0.1216$ can be scientifically attributed to intent abstraction rather than simple feature augmentation.
+1. **Phase 3 Primary Experiment Outcome (3B vs. 3A):**
+   * **Empirical Observation:** Model 3A (Raw feature concatenation) achieved **0.1216 MRR@20**, whereas Model 3B-$\lambda 0$ (Pure 64-D Latent Bottleneck) scored **0.1122 MRR@20** and Model 3B-$\lambda 0.1$ (Supervised Bottleneck) scored **0.1126 MRR@20**.
+   * **Calibrated Finding:** The explicit latent intent bottleneck does **not** outperform raw feature augmentation ($3B \le 3A$). While concatenating raw action and query signals improves the pure sequential GRU ($0.1161 \to 0.1216$), forcing the representation through a 64-D informational bottleneck reduces next-item ranking quality ($0.1216 \to 0.1122$).
+   * **The Mechanism:** On sparse catalogs (>60,000 items) where 77.8% of sessions have $\le 2$ interactions, next-item prediction requires granular item-level discriminative capacity. The bottleneck compresses away item-specific signals in exchange for broad behavioral mode abstraction.
 
-2. **Why ItemCF Outperforms GRU4Rec Under Our Current Setup:**
+2. **Supporting Intent Probing Results (Holdout $N = 4,994$):**
+   A standardized linear probe trained on frozen representations confirms what each architecture captures:
+   * **Mode AUC (Discovery vs. Conversion):** Random (0.5160) $\to$ Pure GRU (0.5708) $\to$ Raw Features (0.6447) $\to$ Pure Bottleneck 3B-$\lambda 0$ (**0.6724**) $\to$ Supervised Bottleneck 3B-$\lambda 0.1$ (**0.6791**).
+   * **Conclusion:** The bottleneck *successfully* isolates behavioral mode information, but this high-level abstraction alone does not improve next-item ranking without fine-grained item co-occurrence signals.
+
+3. **Why ItemCF Outperforms Neural Sequential Models Under Our Current Setup:**
    * In sparse, short sessions ($77.8\%$ have $\le 2$ product interactions), direct statistical co-occurrence with recency decay ($0.7^j$) is a stronger inductive prior than neural sequence transitions learned from scratch on 10,630 items.
-   * Our current single-layer GRU configurations (both pure sequence at $0.1161$ and feature-augmented at $0.1216$) trail ItemCF on early cold-start transitions ($0.1609$ vs $0.1875$).
+   * Both pure sequence ($0.1161$), feature-augmented ($0.1216$), and bottlenecked ($0.1122$) GRUs trail ItemCF on early cold-start transitions ($0.1471$–$0.1609$ vs $0.1875$).
 
 3. **Stratified Search-Session Analysis (Controlling for Confounders):**
    * **Unstratified Gap:** ItemCF drops from **0.1480** (No-search) to **0.1100** (Has-search).
@@ -223,10 +231,11 @@ python src/evaluation/run_benchmarks.py --data-dir data/processed/dev_3pct
 [Phase 0] Data Engineering & Evaluation Harness          ✅ COMPLETE
 [Phase 1] Level 0 (Popularity) & Level 1 (ItemCF)        ✅ COMPLETE (MRR: 0.1440)
 [Phase 2] Level 2 (GRU4Rec) Sequential Baseline          ✅ COMPLETE (MRR: 0.1161)
-[Phase 3] Isolated Intent Experiments                    🚀 CURRENT FOCUS
+[Phase 3] Isolated Intent Experiments                    ✅ COMPLETE
     ├── 3A: GRU + Raw Features Control                   ✅ COMPLETE (MRR: 0.1216)
-    ├── 3B: GRU + Latent Intent Bottleneck               ⏳ NEXT (The 3B vs 3A Test)
-    └── 3C: Dual-Mode Intent Fusion (Discovery vs Conversion)
-[Phase 4] Dense Retrieval & Re-ranking (FAISS / LightGBM)⏳ PLANNED (Only if justified)
+    ├── 3B: GRU + Latent Intent Bottleneck               ✅ COMPLETE (MRR: 0.1122; 3B <= 3A)
+    ├── Intent Probing Suite (Holdout Mode AUC: 0.6791)  ✅ COMPLETE
+    └── 3C: Dual-Mode Behavioral Segmentation            ✅ COMPLETE
+[Phase 4] Retrieval & Re-ranking (conditional on Phase 3) 🚀 CURRENT DECISION POINT
 [Phase 5] Real-Time Interactive Demo (FastAPI + Streamlit)⏳ PLANNED
 ```

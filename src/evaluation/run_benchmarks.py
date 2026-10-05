@@ -29,6 +29,12 @@ try:
 except ImportError:
     has_gru_feat = False
 
+try:
+    from models.gru4rec_intent import GRU4RecIntentRecommender
+    has_gru_intent = True
+except ImportError:
+    has_gru_intent = False
+
 from evaluation.metrics import EvaluationHarness
 
 
@@ -103,12 +109,30 @@ def run_benchmark(data_dir: str, k: int = 20, max_eval_samples: int = None, run_
 
     # 5. Level 3A: GRU4Rec + Raw Features (Control)
     if run_nn and has_gru_feat:
-        print("\n[5/5] Evaluating Level 3A: GRU4Rec + Raw Features (Control)...")
+        print("\n[5/7] Evaluating Level 3A: GRU4Rec + Raw Features (Control)...")
         gru_feat_model = GRU4RecFeaturesRecommender(epochs=4, filter_seen=True)
         gru_feat_model.fit(train_sessions)
         gru_feat_res = harness.evaluate(gru_feat_model, val_examples)
         harness.print_report(gru_feat_res, "Level 3A: GRU + Raw Features (Control)")
         record_result("Level 3A: GRU+Features", gru_feat_res)
+
+    # 6. Level 3B-λ0: Pure Latent Intent Bottleneck (Primary)
+    if run_nn and has_gru_intent:
+        print("\n[6/7] Evaluating Level 3B-λ0: Pure Latent Intent Bottleneck (λ=0)...")
+        gru_intent_l0 = GRU4RecIntentRecommender(lambda_aux=0.0, epochs=4, filter_seen=True)
+        gru_intent_l0.fit(train_sessions)
+        gru_intent_l0_res = harness.evaluate(gru_intent_l0, val_examples)
+        harness.print_report(gru_intent_l0_res, "Level 3B-λ0: Pure Latent Bottleneck")
+        record_result("Level 3B-λ0: Bottleneck", gru_intent_l0_res)
+
+    # 7. Level 3B-λ0.1: Latent Intent Bottleneck + Mode Supervision (Ablation)
+    if run_nn and has_gru_intent:
+        print("\n[7/7] Evaluating Level 3B-λ0.1: Supervised Intent Bottleneck (λ=0.1)...")
+        gru_intent_l01 = GRU4RecIntentRecommender(lambda_aux=0.1, epochs=4, filter_seen=True)
+        gru_intent_l01.fit(train_sessions)
+        gru_intent_l01_res = harness.evaluate(gru_intent_l01, val_examples)
+        harness.print_report(gru_intent_l01_res, "Level 3B-λ0.1: Supervised Bottleneck")
+        record_result("Level 3B-λ0.1: Supervised", gru_intent_l01_res)
 
     df = pd.DataFrame(results_summary)
     print("\n=========================================================================================================================")
